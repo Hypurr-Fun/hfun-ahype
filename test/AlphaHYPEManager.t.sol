@@ -7,14 +7,14 @@ import {console} from "forge-std/console.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {AlphaHYPEManager02} from "../src/AlphaHYPEManager02.sol";
+import {AlphaHYPEManager03} from "../src/AlphaHYPEManager03.sol";
 import {L1Read, L1Write} from "../src/libraries/HcorePrecompiles.sol";
 import {MockPrecompiles} from "./MockPrecompiles.t.sol";
 import {MockL1Write} from "../src/tests/MockL1Write.sol";
 import {MockDelegatorSummary} from "../src/tests/MockL1Read.sol";
 
 
-contract AlphaHYPEManager02Test is MockPrecompiles {
+contract AlphaHYPEManager03Test is MockPrecompiles {
     address internal admin;
     address internal executor;
     uint256 internal executorPk;
@@ -23,8 +23,8 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
     address internal user3;
     address internal validator;
 
-    AlphaHYPEManager02 internal manager;
-    AlphaHYPEManager02 internal implementation;
+    AlphaHYPEManager03 internal manager;
+    AlphaHYPEManager03 internal implementation;
 
     uint256 constant HYPE_DECIMALS = 10 ** 10; // Converting between 18 decimals (wei) and 8 decimals
     uint256 constant INITIAL_DEPOSIT = 100 * HYPE_DECIMALS; // 100 HYPE in wei
@@ -57,7 +57,7 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
         vm.startPrank(admin);
 
         // 1. Deploy implementation
-        implementation = new AlphaHYPEManager02();
+        implementation = new AlphaHYPEManager03();
 
         // 2. Deploy proxy
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
@@ -66,8 +66,8 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
             "" // no initialization data here
         );
 
-        // 3. Cast proxy to AlphaHYPEManager02Harness type
-        manager = AlphaHYPEManager02(payable(address(proxy)));
+        // 3. Cast proxy to AlphaHYPEManager03Harness type
+        manager = AlphaHYPEManager03(payable(address(proxy)));
 
         // 4. Initialize the proxy
         manager.initialize(validator, 0);
@@ -89,9 +89,9 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
 
     // Reverts if validator is zero address
     function test_InitializeRevertsOnZeroValidator() public {
-        AlphaHYPEManager02 newImpl = new AlphaHYPEManager02();
+        AlphaHYPEManager03 newImpl = new AlphaHYPEManager03();
         TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(address(newImpl), admin, "");
-        AlphaHYPEManager02 newManager = AlphaHYPEManager02(payable(address(newProxy)));
+        AlphaHYPEManager03 newManager = AlphaHYPEManager03(payable(address(newProxy)));
 
         vm.expectRevert("AlphaHYPEManager: ZERO_ADDRESS");
         newManager.initialize(address(0), 0);
@@ -399,7 +399,7 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
         // Process - should undelegate for withdrawal
         vm.prank(executor);
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager02.TokenDelegate(validator, 100, true);
+        emit AlphaHYPEManager03.TokenDelegate(validator, 100, true);
         manager.processQueues();
     }
 
@@ -469,6 +469,144 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
         vm.prank(admin);
         manager.transferOwnership(user2);
         assertEq(manager.owner(), user2);
+    }
+
+    // ============ Processor Tests ============
+
+    function test_SetProcessor() public {
+        // Initially processor should be zero address
+        assertEq(manager.processor(), address(0));
+
+        // Owner should be able to set processor
+        vm.prank(admin);
+        manager.setProcessor(executor);
+        assertEq(manager.processor(), executor);
+
+        // Owner should be able to change processor
+        vm.prank(admin);
+        manager.setProcessor(user1);
+        assertEq(manager.processor(), user1);
+
+        // Owner should be able to set processor back to zero
+        vm.prank(admin);
+        manager.setProcessor(address(0));
+        assertEq(manager.processor(), address(0));
+    }
+
+    function test_SetProcessorRevertsForNonOwner() public {
+        // Non-owner should not be able to set processor
+        vm.prank(user1);
+        vm.expectRevert();
+        manager.setProcessor(executor);
+    }
+
+    function test_ProcessQueuesWhenProcessorNotSet() public {
+        // When processor is not set (zero address), anyone can call processQueues
+        assertEq(manager.processor(), address(0));
+
+        // User deposits
+        vm.prank(user1);
+        (bool success,) = address(manager).call{value: 100 * HYPE_DECIMALS}("");
+        assertTrue(success);
+
+        // Any user can call processQueues
+        vm.prank(user1);
+        manager.processQueues();
+        vm.roll(block.number + 1);
+
+        // Verify it worked
+        assertEq(manager.balanceOf(user1), 99);
+    }
+
+    function test_ProcessQueuesWhenProcessorSet() public {
+        // Set processor
+        vm.prank(admin);
+        manager.setProcessor(executor);
+
+        // User deposits
+        vm.prank(user1);
+        (bool success,) = address(manager).call{value: 100 * HYPE_DECIMALS}("");
+        assertTrue(success);
+
+        // Only processor can call processQueues
+        vm.prank(executor);
+        manager.processQueues();
+        vm.roll(block.number + 1);
+
+        // Verify it worked
+        assertEq(manager.balanceOf(user1), 99);
+    }
+
+    function test_ProcessQueuesRevertsWhenCalledByNonProcessor() public {
+        // Set processor to executor
+        vm.prank(admin);
+        manager.setProcessor(executor);
+
+        // User deposits
+        vm.prank(user1);
+        (bool success,) = address(manager).call{value: 100 * HYPE_DECIMALS}("");
+        assertTrue(success);
+
+        // Non-processor (user1) tries to call processQueues
+        vm.prank(user1);
+        vm.expectRevert("AlphaHYPEManager: PROCESSOR_ONLY");
+        manager.processQueues();
+
+        // Non-processor (admin) tries to call processQueues
+        vm.prank(admin);
+        vm.expectRevert("AlphaHYPEManager: PROCESSOR_ONLY");
+        manager.processQueues();
+
+        // Non-processor (user2) tries to call processQueues
+        vm.prank(user2);
+        vm.expectRevert("AlphaHYPEManager: PROCESSOR_ONLY");
+        manager.processQueues();
+
+        // Processor should still be able to call it
+        vm.prank(executor);
+        manager.processQueues();
+        vm.roll(block.number + 1);
+
+        // Verify it worked
+        assertEq(manager.balanceOf(user1), 99);
+    }
+
+    function test_ProcessorChangeAllowsNewProcessorToProceed() public {
+        // Set initial processor
+        vm.prank(admin);
+        manager.setProcessor(executor);
+
+        // User deposits
+        vm.prank(user1);
+        (bool success,) = address(manager).call{value: 100 * HYPE_DECIMALS}("");
+        assertTrue(success);
+
+        // Old processor processes first deposit
+        vm.prank(executor);
+        manager.processQueues();
+        vm.roll(block.number + 1);
+
+        // Change processor to user2
+        vm.prank(admin);
+        manager.setProcessor(user2);
+
+        // Another deposit
+        vm.prank(user1);
+        (bool success2,) = address(manager).call{value: 100 * HYPE_DECIMALS}("");
+        assertTrue(success2);
+
+        // Old processor should no longer be able to process
+        vm.prank(executor);
+        vm.expectRevert("AlphaHYPEManager: PROCESSOR_ONLY");
+        manager.processQueues();
+
+        // New processor should be able to process
+        vm.prank(user2);
+        manager.processQueues();
+        vm.roll(block.number + 1);
+
+        // Verify both deposits were processed
+        assertEq(manager.balanceOf(user1), 198); // 99 + 99
     }
 
     // ============ Complex Integration Tests ============
@@ -582,11 +720,11 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
         // - call undelegate with remaining needed (300)
         // Total: 200 + 100 (pending) + 100 + 300 = 700 HYPE needed
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager02.SpotSend(200, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager03.SpotSend(200, HYPE_SYSTEM_ADDRESS);
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager02.StakingWithdraw(100);
+        emit AlphaHYPEManager03.StakingWithdraw(100);
         vm.expectEmit(true, true, true, true);
-        emit AlphaHYPEManager02.TokenDelegate(validator, 300, true);
+        emit AlphaHYPEManager03.TokenDelegate(validator, 300, true);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -603,7 +741,7 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
         vm.prank(executor);
         // We expecit a withdraw from staking from the previous undelegation
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager02.StakingWithdraw(300);
+        emit AlphaHYPEManager03.StakingWithdraw(300);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -619,7 +757,7 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
 
         // The manager should move the new spot balance to evm
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager02.SpotSend(500, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager03.SpotSend(500, HYPE_SYSTEM_ADDRESS);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -667,7 +805,7 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
         vm.prank(executor);
         vm.expectEmit(true, true, false, true);
         uint256 mintFee = Math.mulDiv(amount, FEE_BPS, BPS_DENOMINATOR, Math.Rounding.Ceil);
-        emit AlphaHYPEManager02.EVMSend(amount - mintFee, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager03.EVMSend(amount - mintFee, HYPE_SYSTEM_ADDRESS);
         manager.processQueues();
         vm.roll(block.number + 1);
     }
@@ -713,10 +851,10 @@ contract AlphaHYPEManager02Test is MockPrecompiles {
 
 // Helper contract for testing reentrancy
 contract ReentrantAttacker {
-    AlphaHYPEManager02 public manager;
+    AlphaHYPEManager03 public manager;
     bool public attacking;
 
-    constructor(AlphaHYPEManager02 _manager) {
+    constructor(AlphaHYPEManager03 _manager) {
         manager = _manager;
     }
 

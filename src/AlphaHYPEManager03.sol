@@ -11,15 +11,14 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
-/// @custom:oz-upgrades-from AlphaHYPEManager01
-contract AlphaHYPEManager02 is Initializable, ERC20Upgradeable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
+/// @custom:oz-upgrades-from AlphaHYPEManager02
+contract AlphaHYPEManager03 is Initializable, ERC20Upgradeable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
 
     // Constants
     address constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
     uint256 constant SCALE_18_TO_8 = 10 ** 10;
     uint256 constant BPS_DENOMINATOR = 10_000; // 100% = 10_000 bps
     uint256 constant FEE_BPS = 10; // 0.1%
-    uint256 constant MIN_DEPOSIT_AMOUNT = 0 ether; // 0 HYPE
 
     // Structs
     struct DepositRequest {
@@ -57,8 +56,10 @@ contract AlphaHYPEManager02 is Initializable, ERC20Upgradeable, ReentrancyGuardU
     uint256 public virtualWithdrawalAmount;
     WithdrawalRequest[] public pendingWithdrawalQueue;
 
+    address public processor;
+    uint256 public minDepositAmount;
 
-    uint256[47] private __gap;
+    uint256[45] private __gap;
 
     // Events
     event DepositQueued(address indexed depositor, uint256 amount);
@@ -112,6 +113,10 @@ contract AlphaHYPEManager02 is Initializable, ERC20Upgradeable, ReentrancyGuardU
 
     function pendingWithdrawalQueueLength() public view returns (uint256) {
         return pendingWithdrawalQueue.length;
+    }
+
+    function pendingDepositQueueLength() public view returns (uint256) {
+        return depositQueue.length;
     }
 
     // Set decimals to 8
@@ -183,6 +188,9 @@ contract AlphaHYPEManager02 is Initializable, ERC20Upgradeable, ReentrancyGuardU
 
     function processQueues() external nonReentrant {
         require(lastProcessedBlock < block.number, "AlphaHYPEManager: ALREADY_PROCESSED");
+        if (processor != address(0)) {
+            require(processor == msg.sender, "AlphaHYPEManager: PROCESSOR_ONLY");
+        }
         lastProcessedBlock = block.number;
         uint256 evmHype8 = address(this).balance / SCALE_18_TO_8;
         require(evmHype8 >= owedUnderlyingAmount + pendingDepositAmount + feeAmount, "AlphaHYPEManager: BANKRUPT");
@@ -292,8 +300,16 @@ contract AlphaHYPEManager02 is Initializable, ERC20Upgradeable, ReentrancyGuardU
         maxSupply = _maxSupply;
     }
 
+    function setMinDepositAmount(uint256 _minDepositAmount) external onlyOwner {
+        minDepositAmount = _minDepositAmount;
+    }
+
+    function setProcessor(address _processor) external onlyOwner {
+        processor = _processor;
+    }
+
     function _handleNativeTransfer(address from, uint256 value) internal {
-        require(msg.value >= MIN_DEPOSIT_AMOUNT, "AlphaHYPEManager: AMOUNT_TOO_SMALL");
+        require(msg.value >= minDepositAmount, "AlphaHYPEManager: AMOUNT_TOO_SMALL");
         require(depositQueue.length < 100, "AlphaHYPEManager: DEPOSIT_QUEUE_FULL");
         // Require amount to be multiple of 10^10 to avoid rounding issues
         require(value % (10 ** 10) == 0, "AlphaHYPEManager: INVALID_AMOUNT");
