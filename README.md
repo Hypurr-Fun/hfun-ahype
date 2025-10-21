@@ -1,6 +1,6 @@
 # Alpha HYPE Liquid Staking Manager
 
-AlphaHYPEManager03 is an upgradeable liquid staking vault for Hyperliquid's native HYPE token. It mints the wrapped Alpha HYPE token (rendered on-chain as `\u03b1HYPE`) and manages the full lifecycle of deposits, validator delegation, reward compounding, and redemptions through HyperCore precompiles.
+AlphaHYPEManager03 is an upgradeable liquid staking vault for Hyperliquid's native HYPE token. It mints the wrapped Alpha HYPE token (rendered on-chain as `αHYPE`) and manages the full lifecycle of deposits, validator delegation, reward compounding, and redemptions through HyperCore precompiles.
 
 ## Key Features
 - Queue-based deposits and withdrawals priced against the real-time underlying HYPE backing.
@@ -11,12 +11,12 @@ AlphaHYPEManager03 is an upgradeable liquid staking vault for Hyperliquid's nati
 - Role-gated processor that guarantees only a trusted agent executes queue processing.
 
 ## Token Model
-- **Wrapped asset:** Alpha HYPE (`\u03b1HYPE`) extends `ERC20Upgradeable` with 8 decimals.
+- **Wrapped asset:** Alpha HYPE (`αHYPE`) extends `ERC20Upgradeable` with 8 decimals.
 - **Backing:** The underlying pool combines the contract's EVM balance (scaled to 8 decimals), Hyperliquid spot holdings, delegated stake, undelegated stake, and pending withdrawals queried via `L1Read`.
 - **Supply cap:** Optional `maxSupply` (uint64). A value of zero disables the cap.
 - **Fees:** `FEE_BPS = 10` (0.1%) on both deposits and withdrawals. Fees accumulate on contract balance and can be harvested by the owner with `collectFees`.
 - **Accounting helpers:**
-  - `getERC20Supply()` = circulating `\u03b1HYPE` + queued withdrawal balance.
+  - `getERC20Supply()` = circulating `αHYPE` + queued withdrawal balance.
   - `getUnderlyingSupply()` = total HYPE backing less queued deposits, queued withdrawals, and accrued fees.
 
 ## Operational Flow
@@ -35,7 +35,7 @@ AlphaHYPEManager03 is an upgradeable liquid staking vault for Hyperliquid's nati
 - Revalidates solvency by comparing EVM holdings to owed withdrawals, pending deposits, and accrued fees.
 - Reads HyperCore state via `L1Read.delegatorSummary` and `L1Read.spotBalance`.
 - Prices deposits and withdrawals independently using `Math.mulDiv` for high-precision ratios.
-- Executes `_processDeposits()` to mint `\u03b1HYPE` minus the mint fee.
+- Executes `_processDeposits()` to mint `αHYPE` minus the mint fee.
 - Executes `_processWithdrawals()` to settle requests when enough liquidity exists.
 - Balances liquidity by:
   - Bridging HYPE from spot (`L1Write.spotSend`) if EVM liquidity is short.
@@ -44,9 +44,9 @@ AlphaHYPEManager03 is an upgradeable liquid staking vault for Hyperliquid's nati
 
 ### Withdrawals
 1. Holders call `withdraw(amount)` which:
-   - Requires enough `\u03b1HYPE` balance and a queue with <100 entries.
+   - Requires enough `αHYPE` balance and a queue with <100 entries.
    - Locks an exchange rate snapshot (`pricePerTokenX18`) to shield users if slashing occurs before fulfillment.
-   - Burns `\u03b1HYPE` immediately, increments `withdrawalAmount` and `virtualWithdrawalAmount`, and enqueues a `WithdrawalRequest`.
+   - Burns `αHYPE` immediately, increments `withdrawalAmount` and `virtualWithdrawalAmount`, and enqueues a `WithdrawalRequest`.
 2. `_processWithdrawals()` settles requests when EVM liquidity permits:
    - Calculates the lesser of locked price and current spot price to apply slashing.
    - Applies the 0.1% burn fee, crediting users via `owedUnderlyingAmounts` and the protocol via `feeAmount`.
