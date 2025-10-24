@@ -7,14 +7,14 @@ import {console} from "forge-std/console.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {AlphaHYPEManager03} from "../src/AlphaHYPEManager03.sol";
+import {AlphaHYPEManager04} from "../src/AlphaHYPEManager04.sol";
 import {L1Read, L1Write} from "../src/libraries/HcorePrecompiles.sol";
 import {MockPrecompiles} from "./MockPrecompiles.t.sol";
 import {MockL1Write} from "../src/tests/MockL1Write.sol";
 import {MockDelegatorSummary} from "../src/tests/MockL1Read.sol";
 
 
-contract AlphaHYPEManager03Test is MockPrecompiles {
+contract AlphaHYPEManager04Test is MockPrecompiles {
     address internal admin;
     address internal executor;
     uint256 internal executorPk;
@@ -23,8 +23,8 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
     address internal user3;
     address internal validator;
 
-    AlphaHYPEManager03 internal manager;
-    AlphaHYPEManager03 internal implementation;
+    AlphaHYPEManager04 internal manager;
+    AlphaHYPEManager04 internal implementation;
 
     uint256 constant HYPE_DECIMALS = 10 ** 10; // Converting between 18 decimals (wei) and 8 decimals
     uint256 constant INITIAL_DEPOSIT = 100 * HYPE_DECIMALS; // 100 HYPE in wei
@@ -57,7 +57,7 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
         vm.startPrank(admin);
 
         // 1. Deploy implementation
-        implementation = new AlphaHYPEManager03();
+        implementation = new AlphaHYPEManager04();
 
         // 2. Deploy proxy
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
@@ -66,8 +66,8 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
             "" // no initialization data here
         );
 
-        // 3. Cast proxy to AlphaHYPEManager03Harness type
-        manager = AlphaHYPEManager03(payable(address(proxy)));
+        // 3. Cast proxy to AlphaHYPEManager04Harness type
+        manager = AlphaHYPEManager04(payable(address(proxy)));
 
         // 4. Initialize the proxy
         manager.initialize(validator, 0);
@@ -89,9 +89,9 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
 
     // Reverts if validator is zero address
     function test_InitializeRevertsOnZeroValidator() public {
-        AlphaHYPEManager03 newImpl = new AlphaHYPEManager03();
+        AlphaHYPEManager04 newImpl = new AlphaHYPEManager04();
         TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(address(newImpl), admin, "");
-        AlphaHYPEManager03 newManager = AlphaHYPEManager03(payable(address(newProxy)));
+        AlphaHYPEManager04 newManager = AlphaHYPEManager04(payable(address(newProxy)));
 
         vm.expectRevert("AlphaHYPEManager: ZERO_ADDRESS");
         newManager.initialize(address(0), 0);
@@ -399,7 +399,7 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
         // Process - should undelegate for withdrawal
         vm.prank(executor);
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager03.TokenDelegate(validator, 100, true);
+        emit AlphaHYPEManager04.TokenDelegate(validator, 100, true);
         manager.processQueues();
     }
 
@@ -720,11 +720,11 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
         // - call undelegate with remaining needed (300)
         // Total: 200 + 100 (pending) + 100 + 300 = 700 HYPE needed
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager03.SpotSend(200, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager04.SpotSend(200, HYPE_SYSTEM_ADDRESS);
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager03.StakingWithdraw(100);
+        emit AlphaHYPEManager04.StakingWithdraw(100);
         vm.expectEmit(true, true, true, true);
-        emit AlphaHYPEManager03.TokenDelegate(validator, 300, true);
+        emit AlphaHYPEManager04.TokenDelegate(validator, 300, true);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -741,7 +741,7 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
         vm.prank(executor);
         // We expecit a withdraw from staking from the previous undelegation
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager03.StakingWithdraw(300);
+        emit AlphaHYPEManager04.StakingWithdraw(300);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -757,7 +757,7 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
 
         // The manager should move the new spot balance to evm
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager03.SpotSend(500, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager04.SpotSend(500, HYPE_SYSTEM_ADDRESS);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -805,7 +805,7 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
         vm.prank(executor);
         vm.expectEmit(true, true, false, true);
         uint256 mintFee = Math.mulDiv(amount, FEE_BPS, BPS_DENOMINATOR, Math.Rounding.Ceil);
-        emit AlphaHYPEManager03.EVMSend(amount - mintFee, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager04.EVMSend(amount - mintFee, HYPE_SYSTEM_ADDRESS);
         manager.processQueues();
         vm.roll(block.number + 1);
     }
@@ -851,10 +851,10 @@ contract AlphaHYPEManager03Test is MockPrecompiles {
 
 // Helper contract for testing reentrancy
 contract ReentrantAttacker {
-    AlphaHYPEManager03 public manager;
+    AlphaHYPEManager04 public manager;
     bool public attacking;
 
-    constructor(AlphaHYPEManager03 _manager) {
+    constructor(AlphaHYPEManager04 _manager) {
         manager = _manager;
     }
 

@@ -8,7 +8,7 @@ import {console} from "forge-std/console.sol";
 
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {MockPrecompiles} from "./MockPrecompiles.t.sol";
-import {AlphaHYPEManager02} from "../src/AlphaHYPEManager02.sol";
+import {AlphaHYPEManager04} from "../src/AlphaHYPEManager04.sol";
 
 contract AlphaHypeManagerTest is MockPrecompiles {
     address internal admin;
@@ -19,7 +19,7 @@ contract AlphaHypeManagerTest is MockPrecompiles {
     address internal user3;
     address internal validator;
 
-    AlphaHYPEManager02 internal manager;
+    AlphaHYPEManager04 internal manager;
 
     function setUp() public override {
         super.setUp();
@@ -41,7 +41,7 @@ contract AlphaHypeManagerTest is MockPrecompiles {
         vm.startPrank(admin);
 
         // 1. Deploy implementation
-        AlphaHYPEManager02 implementation = new AlphaHYPEManager02();
+        AlphaHYPEManager04 implementation = new AlphaHYPEManager04();
 
         // 2. Deploy proxy
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
@@ -50,8 +50,8 @@ contract AlphaHypeManagerTest is MockPrecompiles {
             "" // no initialization data here
         );
 
-        // 3. Cast proxy to AlphaHYPEManager02Harness type
-        manager = AlphaHYPEManager02(payable(address(proxy)));
+        // 3. Cast proxy to AlphaHYPEManager04Harness type
+        manager = AlphaHYPEManager04(payable(address(proxy)));
 
         // 4. Initialize the proxy
         manager.initialize(validator, 0);
@@ -87,10 +87,10 @@ contract AlphaHypeManagerTest is MockPrecompiles {
 contract Fuzzer is Test {
     mapping(address => uint256) public ks;
 
-    AlphaHYPEManager02 internal manager;
+    AlphaHYPEManager04 internal manager;
 
     constructor(address payable _manager) {
-        manager = AlphaHYPEManager02(payable(_manager));
+        manager = AlphaHYPEManager04(payable(_manager));
     }
 
     function deposit(uint256 amount) public {

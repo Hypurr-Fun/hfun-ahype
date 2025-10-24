@@ -4,21 +4,21 @@ pragma solidity =0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import {AlphaHYPEManager02} from "../src/AlphaHYPEManager02.sol";
+import {AlphaHYPEManager04} from "../src/AlphaHYPEManager04.sol";
 import {L1Read, L1Write} from "../src/libraries/HcorePrecompiles.sol";
 import {MockPrecompiles} from "./MockPrecompiles.t.sol";
 import {MockL1Write} from "../src/tests/MockL1Write.sol";
 
 import {console} from "forge-std/console.sol";
 
-contract AlphaHYPEManager02SecurityTest is MockPrecompiles {
+contract AlphaHYPEManager04SecurityTest is MockPrecompiles {
     address internal admin;
     address internal executor;
     address internal user;
     address internal validator;
 
-    AlphaHYPEManager02 internal manager;
-    AlphaHYPEManager02 internal implementation;
+    AlphaHYPEManager04 internal manager;
+    AlphaHYPEManager04 internal implementation;
 
     uint256 constant HYPE_DECIMALS = 10 ** 10; // 18->8 decimals scale
 
@@ -34,9 +34,9 @@ contract AlphaHYPEManager02SecurityTest is MockPrecompiles {
         vm.deal(address(this), 1000 ether);
 
         vm.startPrank(admin);
-        implementation = new AlphaHYPEManager02();
+        implementation = new AlphaHYPEManager04();
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), admin, "");
-        manager = AlphaHYPEManager02(payable(address(proxy)));
+        manager = AlphaHYPEManager04(payable(address(proxy)));
         manager.initialize(validator, 0);
         vm.stopPrank();
     }
@@ -176,12 +176,12 @@ contract AlphaHYPEManager02SecurityTest is MockPrecompiles {
 
 // Attacker that tries to reenter during claim
 contract ReenterOnClaim {
-    AlphaHYPEManager02 public manager;
+    AlphaHYPEManager04 public manager;
     bool public tryReenterClaim;
     bool public tryProcessQueues;
     bool public triedWithdraw;
 
-    constructor(AlphaHYPEManager02 _manager) {
+    constructor(AlphaHYPEManager04 _manager) {
         manager = _manager;
     }
 
@@ -201,7 +201,7 @@ contract ReenterOnClaim {
     receive() external payable {
         if (tryReenterClaim) {
             // Low-level call to avoid bubbling revert and failing the whole claim
-            address(manager).call(abi.encodeWithSelector(AlphaHYPEManager02.claimWithdrawal.selector));
+            address(manager).call(abi.encodeWithSelector(AlphaHYPEManager04.claimWithdrawal.selector));
             tryReenterClaim = false;
         }
         if (tryProcessQueues) {
@@ -213,7 +213,7 @@ contract ReenterOnClaim {
         // Also attempt to add another withdrawal while receiving (should fail due to no balance)
         if (!triedWithdraw) {
             triedWithdraw = true;
-            address(manager).call(abi.encodeWithSelector(AlphaHYPEManager02.withdraw.selector, uint256(1)));
+            address(manager).call(abi.encodeWithSelector(AlphaHYPEManager04.withdraw.selector, uint256(1)));
         }
     }
 }
