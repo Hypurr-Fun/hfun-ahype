@@ -11,8 +11,8 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
-/// @custom:oz-upgrades-from AlphaHYPEManager02
-contract AlphaHYPEManager03 is Initializable, ERC20Upgradeable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
+/// @custom:oz-upgrades-from AlphaHYPEManager03
+contract AlphaHYPEManager04 is Initializable, ERC20Upgradeable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
 
     // Constants
     address constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
@@ -58,8 +58,9 @@ contract AlphaHYPEManager03 is Initializable, ERC20Upgradeable, ReentrancyGuardU
 
     address public processor;
     uint256 public minDepositAmount;
+    uint256 public lastBridgeEventBlock;
 
-    uint256[45] private __gap;
+    uint256[44] private __gap;
 
     // Events
     event DepositQueued(address indexed depositor, uint256 amount);
@@ -130,6 +131,8 @@ contract AlphaHYPEManager03 is Initializable, ERC20Upgradeable, ReentrancyGuardU
     }
 
     function getUnderlyingSupply() public view returns (uint256) {
+        require(block.number != lastBridgeEventBlock, "AlphaHYPEManager: STALE_PRECOMPILE");
+
         // EVM balance
         uint256 underlyingSupply = (address(this).balance) / SCALE_18_TO_8 - pendingDepositAmount - owedUnderlyingAmount - feeAmount; // EVM balance in 8 decimals
 
@@ -248,6 +251,7 @@ contract AlphaHYPEManager03 is Initializable, ERC20Upgradeable, ReentrancyGuardU
             if (toBridgeToEVM > 0) {
                 L1Write.spotSend(HYPE_SYSTEM_ADDRESS, hypeTokenIndex, toBridgeToEVM);
                 emit SpotSend(toBridgeToEVM, HYPE_SYSTEM_ADDRESS);
+                lastBridgeEventBlock = block.number;
                 _virtualWithdrawalAmount -= toBridgeToEVM;
             }
             // Then, check pending withdrawals
@@ -276,6 +280,7 @@ contract AlphaHYPEManager03 is Initializable, ERC20Upgradeable, ReentrancyGuardU
                 (bool success,) = payable(HYPE_SYSTEM_ADDRESS).call{value: toSendWei}("");
                 require(success, "Failed to send HYPE to spot");
                 emit EVMSend(evmHype8, HYPE_SYSTEM_ADDRESS);
+                lastBridgeEventBlock = block.number;
             }
             if (sb.total > 0) {
                 L1Write.stakingDeposit(sb.total);
