@@ -7,14 +7,14 @@ import {console} from "forge-std/console.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {AlphaHYPEManager04} from "../src/AlphaHYPEManager04.sol";
+import {AlphaHYPEManager05} from "../src/AlphaHYPEManager05.sol";
 import {L1Read, L1Write} from "../src/libraries/HcorePrecompiles.sol";
 import {MockPrecompiles} from "./MockPrecompiles.t.sol";
 import {MockL1Write} from "../src/tests/MockL1Write.sol";
 import {MockDelegatorSummary} from "../src/tests/MockL1Read.sol";
 
 
-contract AlphaHYPEManager04Test is MockPrecompiles {
+contract AlphaHYPEManager05Test is MockPrecompiles {
     address internal admin;
     address internal executor;
     uint256 internal executorPk;
@@ -23,8 +23,8 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
     address internal user3;
     address internal validator;
 
-    AlphaHYPEManager04 internal manager;
-    AlphaHYPEManager04 internal implementation;
+    AlphaHYPEManager05 internal manager;
+    AlphaHYPEManager05 internal implementation;
 
     uint256 constant HYPE_DECIMALS = 10 ** 10; // Converting between 18 decimals (wei) and 8 decimals
     uint256 constant INITIAL_DEPOSIT = 100 * HYPE_DECIMALS; // 100 HYPE in wei
@@ -57,7 +57,7 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
         vm.startPrank(admin);
 
         // 1. Deploy implementation
-        implementation = new AlphaHYPEManager04();
+        implementation = new AlphaHYPEManager05();
 
         // 2. Deploy proxy
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
@@ -66,8 +66,8 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
             "" // no initialization data here
         );
 
-        // 3. Cast proxy to AlphaHYPEManager04Harness type
-        manager = AlphaHYPEManager04(payable(address(proxy)));
+        // 3. Cast proxy to AlphaHYPEManager05Harness type
+        manager = AlphaHYPEManager05(payable(address(proxy)));
 
         // 4. Initialize the proxy
         manager.initialize(validator, 0);
@@ -89,9 +89,9 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
 
     // Reverts if validator is zero address
     function test_InitializeRevertsOnZeroValidator() public {
-        AlphaHYPEManager04 newImpl = new AlphaHYPEManager04();
+        AlphaHYPEManager05 newImpl = new AlphaHYPEManager05();
         TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(address(newImpl), admin, "");
-        AlphaHYPEManager04 newManager = AlphaHYPEManager04(payable(address(newProxy)));
+        AlphaHYPEManager05 newManager = AlphaHYPEManager05(payable(address(newProxy)));
 
         vm.expectRevert("AlphaHYPEManager: ZERO_ADDRESS");
         newManager.initialize(address(0), 0);
@@ -354,9 +354,15 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
         vm.prank(executor);
         manager.processQueues();
 
-        // Verify staking deposit was called (check via mock state)
+        // With deferred L1 writes, changes apply next block. Same block shows no change.
         MockL1Write mockWrite = MockL1Write(address(0x3333333333333333333333333333333333333333));
-        assertEq(mockWrite.getStakingBalance(address(manager)).undelegated, 1000);
+        assertEq(mockWrite.getStakingBalance(address(manager)).undelegated, 0, "no immediate staking change");
+        assertEq(mockWrite.getSpotBalance(address(manager), 0).total, 1000, "spot unchanged same block");
+
+        // Next block: staking deposit becomes effective
+        vm.roll(block.number + 1);
+        assertEq(mockWrite.getStakingBalance(address(manager)).undelegated, 1000, "staking updated next block");
+        assertEq(mockWrite.getSpotBalance(address(manager), 0).total, 0, "spot reduced next block");
     }
 
     function test_NativeTransferToStakingAddress() public {
@@ -399,7 +405,7 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
         // Process - should undelegate for withdrawal
         vm.prank(executor);
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager04.TokenDelegate(validator, 100, true);
+        emit AlphaHYPEManager05.TokenDelegate(validator, 100, true);
         manager.processQueues();
     }
 
@@ -649,6 +655,49 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
         assertEq(manager.balanceOf(user2), 99);
     }
 
+    function test_BurnIncreasesPricePerToken() public {
+        // Setup: two users deposit
+        _userDepositAndProcess(user1, 100);
+        _userDepositAndProcess(user2, 100);
+
+        // Both users have ~99 aHYPE each (after 0.1% fee)
+        uint256 user1Balance = manager.balanceOf(user1);
+        uint256 user2Balance = manager.balanceOf(user2);
+        assertEq(user1Balance, 99);
+        assertEq(user2Balance, 99);
+
+        // Record price before burn
+        // Price = underlyingSupply / erc20Supply
+        uint256 erc20SupplyBefore = manager.getERC20Supply();
+
+        // User1 burns half their tokens
+        uint256 burnAmount = 49;
+        vm.prank(user1);
+        manager.burn(burnAmount);
+
+        // Verify burn worked
+        assertEq(manager.balanceOf(user1), user1Balance - burnAmount);
+
+        // erc20Supply decreased
+        uint256 erc20SupplyAfter = manager.getERC20Supply();
+        assertEq(erc20SupplyAfter, erc20SupplyBefore - burnAmount);
+
+        // Price increased: same underlying, fewer tokens outstanding
+        // New deposit should receive fewer aHYPE per HYPE deposited
+        vm.prank(user3);
+        (bool success,) = address(manager).call{value: 100 * HYPE_DECIMALS}("");
+        assertTrue(success);
+
+        vm.prank(executor);
+        manager.processQueues();
+        vm.roll(block.number + 1);
+
+        // User3 should receive fewer tokens than user1/user2 did initially
+        // because the price per token is now higher
+        uint256 user3Balance = manager.balanceOf(user3);
+        assertLt(user3Balance, 99, "User3 should receive fewer tokens due to higher price after burn");
+    }
+
     function test_PriceCalculationWithMixedBalances() public {
         // Setup existing supply
         _setupUserWithBalance(user1, 300);
@@ -720,11 +769,11 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
         // - call undelegate with remaining needed (300)
         // Total: 200 + 100 (pending) + 100 + 300 = 700 HYPE needed
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager04.SpotSend(200, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager05.SpotSend(200, HYPE_SYSTEM_ADDRESS);
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager04.StakingWithdraw(100);
+        emit AlphaHYPEManager05.StakingWithdraw(100);
         vm.expectEmit(true, true, true, true);
-        emit AlphaHYPEManager04.TokenDelegate(validator, 300, true);
+        emit AlphaHYPEManager05.TokenDelegate(validator, 300, true);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -741,7 +790,7 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
         vm.prank(executor);
         // We expecit a withdraw from staking from the previous undelegation
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager04.StakingWithdraw(300);
+        emit AlphaHYPEManager05.StakingWithdraw(300);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -757,7 +806,7 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
 
         // The manager should move the new spot balance to evm
         vm.expectEmit(true, true, false, true);
-        emit AlphaHYPEManager04.SpotSend(500, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager05.SpotSend(500, HYPE_SYSTEM_ADDRESS);
         manager.processQueues();
         vm.roll(block.number + 1);
 
@@ -805,7 +854,7 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
         vm.prank(executor);
         vm.expectEmit(true, true, false, true);
         uint256 mintFee = Math.mulDiv(amount, FEE_BPS, BPS_DENOMINATOR, Math.Rounding.Ceil);
-        emit AlphaHYPEManager04.EVMSend(amount - mintFee, HYPE_SYSTEM_ADDRESS);
+        emit AlphaHYPEManager05.EVMSend(amount - mintFee, HYPE_SYSTEM_ADDRESS);
         manager.processQueues();
         vm.roll(block.number + 1);
     }
@@ -851,10 +900,10 @@ contract AlphaHYPEManager04Test is MockPrecompiles {
 
 // Helper contract for testing reentrancy
 contract ReentrantAttacker {
-    AlphaHYPEManager04 public manager;
+    AlphaHYPEManager05 public manager;
     bool public attacking;
 
-    constructor(AlphaHYPEManager04 _manager) {
+    constructor(AlphaHYPEManager05 _manager) {
         manager = _manager;
     }
 
