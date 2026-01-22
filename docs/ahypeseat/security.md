@@ -94,12 +94,6 @@ aHYPESeat assumes the collateral token (aHYPE):
 - No blacklisting or pausing
 - `transfer` and `transferFrom` return boolean
 
-## Known Limitations
-
-1. **Gas Costs**: `getHealthySeats()` may be expensive for large seat counts
-2. **Front-Running**: Liquidations can be front-run by MEV bots
-3. **Parameter Changes**: Fee changes affect all existing positions
-
 ## Audit Status
 
 | Contract | Audit Status | Auditor |
