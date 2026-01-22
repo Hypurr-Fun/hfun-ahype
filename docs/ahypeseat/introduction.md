@@ -42,14 +42,14 @@ SeatMarket is a fee/collateral escrow system that provides gated access through 
 │  - Withdraw αHYPE         │   │  - Liquidation system         │
 │  - Claim HYPE             │   │  - Fee distribution + burn    │
 └───────────────────────────┘   └───────────────────────────────┘
-                │                               │
-                ▼                               │
-┌───────────────────────────┐                   │
-│    HyperCore Precompiles  │                   │
-│                           │                   │
-│  - L1Read (state queries) │                   │
-│  - L1Write (mutations)    │◄──────────────────┘
-│  - Validator delegation   │      (uses αHYPE as collateral)
+                │                             
+                ▼                              
+┌───────────────────────────┐   
+│    HyperCore Precompiles  │ 
+│                           │
+│  - L1Read (state queries) │  
+│  - L1Write (mutations)    │
+│  - Validator delegation   │ 
 │  - Spot balance mgmt      │
 └───────────────────────────┘
 ```
