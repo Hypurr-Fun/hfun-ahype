@@ -1,22 +1,4 @@
-# aHYPESeat - Utilization-Based Seat Market
-
-SeatMarket is a fee/collateral escrow system that provides gated access through a limited number of "seats." Users lock aHYPE collateral to occupy a seat and accrue fees over time based on system utilization. Unhealthy positions can be liquidated by anyone.
-
-## Key Features
-
-- **Limited Capacity**: Fixed maximum number of seats (`maxSeats`)
-- **Collateralized Access**: Users deposit aHYPE to occupy a seat
-- **Utilization-Based Fees**: Fee rate scales with seat occupancy
-- **Liquidation System**: Unhealthy positions can be kicked
-- **Deflationary Burns**: Portion of fees burned to increase αHYPE value
-- **Enumerable Holders**: Track all seat holders for backend integration
-
-## Use Cases
-
-- API access gating for premium services
-- Rate-limited access to compute resources
-- Membership systems with dynamic pricing
-- Collateralized subscription services
+# aHYPESeat core logic
 
 ## Fee Model
 

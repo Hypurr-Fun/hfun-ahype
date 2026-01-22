@@ -1,28 +1,28 @@
-# aHYPE Protocol
+# aHYPESeat - Utilization-Based Seat Market
 
-Technical documentation for the aHYPE liquid staking protocol and aHYPESeat market on Hyperliquid.
+SeatMarket is a fee/collateral escrow system that provides gated access through a limited number of "seats." Users lock aHYPE collateral to occupy a seat and accrue fees over time based on system utilization. Unhealthy positions can be liquidated by anyone.
 
-## Components
+## Key Features
 
-### aHYPE - Alpha HYPE Liquid Staking Manager
+- **Limited Capacity**: Fixed maximum number of seats (`maxSeats`)
+- **Collateralized Access**: Users deposit aHYPE to occupy a seat
+- **Utilization-Based Fees**: Fee rate scales with seat occupancy
+- **Liquidation System**: Unhealthy positions can be kicked
+- **Deflationary Burns**: Portion of fees burned to increase αHYPE value
+- **Enumerable Holders**: Track all seat holders for backend integration
 
-An upgradeable liquid staking vault for Hyperliquid's native HYPE token. Mints the wrapped Alpha HYPE token (`αHYPE`) and manages deposits, validator delegation, reward compounding, and redemptions through HyperCore precompiles.
+## Use Cases
 
-**Key Features:**
-- Queue-based deposits and withdrawals
-- Real-time price against underlying HYPE backing
-- 8-decimal ERC20 supply mirroring Hyperliquid accounting
-- Automated bridging between EVM, Spot, and staking delegations
+- API access gating for premium services
+- Rate-limited access to compute resources
+- Membership systems with dynamic pricing
+- Collateralized subscription services
+- 
+## Contract Addresses
 
-### aHYPESeat - Utilization-Based Seat Market
-
-A fee/collateral escrow system providing gated access through limited "seats" using aHYPE token collateral.
-
-**Key Features:**
-- Fixed maximum seat capacity
-- Utilization-based dynamic fee model
-- Liquidation system for unhealthy positions
-- Deflationary fee burn mechanism
+| Contract          | Network | Address |
+|-------------------|---------|---------|
+| Sentry SeatMarket | Hyperliquid EVM | 0x6301983885567Ff45aa2A5E5E5456d23A76F7962 |
 
 ## Architecture
 
@@ -53,26 +53,3 @@ A fee/collateral escrow system providing gated access through limited "seats" us
 │  - Spot balance mgmt      │
 └───────────────────────────┘
 ```
-
-## Quick Links
-
-| Resource | Description |
-|----------|-------------|
-| [aHYPE Interface](ahype/interface.md) | Full contract API reference |
-| [aHYPESeat Interface](ahypeseat/interface.md) | Seat market API reference |
-| [Deployment Guide](reference/deployment.md) | Deployment and upgrade instructions |
-| [Security](reference/security.md) | Security model and considerations |
-
-## Contract Addresses
-
-| Contract          | Network | Address |
-|-------------------|---------|---------|
-| AlphaHYPEManager  | Hyperliquid EVM | 0xe44bd27c9f10fa2f89fdb3ab4b4f0e460da29ea8 |
-| Sentry SeatMarket | Hyperliquid EVM | 0x6301983885567Ff45aa2A5E5E5456d23A76F7962 |
-
-## Token Specifications
-
-| Token | Symbol | Decimals | Type |
-|-------|--------|----------|------|
-| Alpha HYPE | αHYPE | 8 | ERC20 (Upgradeable) |
-| HYPE | HYPE | 18 | Native |
